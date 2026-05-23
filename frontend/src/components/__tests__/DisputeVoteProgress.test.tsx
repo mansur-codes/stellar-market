@@ -1,6 +1,8 @@
+import "@testing-library/jest-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import DisputeVoteProgress from "../DisputeVoteProgress";
 import { useDisputeStatus } from "@/hooks/useDisputeStatus";
+import type { Dispute } from "@/types";
 
 // Mock the useDisputeStatus hook
 jest.mock("@/hooks/useDisputeStatus");
@@ -46,7 +48,7 @@ describe("DisputeVoteProgress", () => {
         voter: {
           id: "voter-1",
           username: "voter1",
-          walletAddress: "GVOT123",
+          walletAddress: "GVOTAT123",
         },
       },
       {
@@ -59,11 +61,11 @@ describe("DisputeVoteProgress", () => {
         voter: {
           id: "voter-2",
           username: "voter2",
-          walletAddress: "GVOT456",
+          walletAddress: "GVOTAT456",
         },
       },
     ],
-  };
+  } as unknown as Dispute;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -77,9 +79,9 @@ describe("DisputeVoteProgress", () => {
       refetch: jest.fn(),
     });
 
-    render(<DisputeVoteProgress disputeId="1" />);
-    
-    expect(screen.getByRole("generic")).toHaveClass("animate-pulse");
+    const { container } = render(<DisputeVoteProgress disputeId="1" />);
+
+    expect(container.querySelector(".animate-pulse")).toBeInTheDocument();
   });
 
   it("displays vote counts correctly", async () => {
