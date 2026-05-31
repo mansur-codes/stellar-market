@@ -1,19 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { X, SlidersHorizontal, ChevronDown, ChevronUp } from "lucide-react";
 import { JobFilters } from "@/hooks/useJobFilters";
-
-const SKILLS = [
-  "Rust",
-  "TypeScript",
-  "React",
-  "Figma",
-  "Solidity",
-  "Node.js",
-  "Python",
-  "Go",
-];
+import { useFocusTrap } from "@/hooks/useFocusTrap";
+import { JOB_CATEGORIES, JOB_SKILLS } from "@/constants/jobs";
 
 const STATUSES = [
   { value: "OPEN", label: "Open" },
@@ -59,6 +50,7 @@ function FilterSection({
     <div className="border-b border-theme-border pb-4 mb-4 last:border-b-0 last:mb-0 last:pb-0">
       <button
         onClick={() => setOpen(!open)}
+        aria-expanded={open}
         className="flex items-center justify-between w-full text-sm font-medium text-theme-heading mb-2"
       >
         {title}
@@ -78,6 +70,10 @@ export default function FilterSidebar({
   isOpen,
   onClose,
 }: FilterSidebarProps) {
+  const drawerRef = useRef<HTMLDivElement>(null);
+
+  useFocusTrap(drawerRef, { open: isOpen, onClose });
+
   const content = (
     <div>
       {/* Header */}
@@ -94,6 +90,7 @@ export default function FilterSidebar({
         <button
           onClick={onClose}
           className="lg:hidden p-1 text-theme-text hover:text-theme-heading transition-colors"
+          aria-label="Close filters"
         >
           <X size={20} />
         </button>
@@ -101,7 +98,9 @@ export default function FilterSidebar({
 
       {/* Sort */}
       <FilterSection title="Sort By">
+        <label htmlFor="filter-sort" className="sr-only">Sort By</label>
         <select
+          id="filter-sort"
           value={filters.sort}
           onChange={(e) => updateFilter("sort", e.target.value)}
           className="input-field text-sm"
@@ -114,10 +113,28 @@ export default function FilterSidebar({
         </select>
       </FilterSection>
 
+      {/* Category */}
+      <FilterSection title="Category">
+        <label htmlFor="filter-category" className="sr-only">Category</label>
+        <select
+          id="filter-category"
+          value={filters.category}
+          onChange={(e) => updateFilter("category", e.target.value)}
+          className="input-field text-sm"
+        >
+          <option value="All">All Categories</option>
+          {JOB_CATEGORIES.map((category) => (
+            <option key={category} value={category}>
+              {category}
+            </option>
+          ))}
+        </select>
+      </FilterSection>
+
       {/* Skills */}
       <FilterSection title="Skills">
         <div className="flex flex-wrap gap-2">
-          {SKILLS.map((skill) => (
+          {JOB_SKILLS.map((skill) => (
             <button
               key={skill}
               onClick={() => toggleArrayFilter("skills", skill)}
@@ -153,7 +170,9 @@ export default function FilterSidebar({
       {/* Budget Range */}
       <FilterSection title="Budget (XLM)">
         <div className="flex gap-2">
+          <label htmlFor="filter-budget-min" className="sr-only">Minimum budget</label>
           <input
+            id="filter-budget-min"
             type="number"
             placeholder="Min"
             value={filters.minBudget}
@@ -161,7 +180,9 @@ export default function FilterSidebar({
             className="input-field text-sm"
             min={0}
           />
+          <label htmlFor="filter-budget-max" className="sr-only">Maximum budget</label>
           <input
+            id="filter-budget-max"
             type="number"
             placeholder="Max"
             value={filters.maxBudget}
@@ -217,7 +238,7 @@ export default function FilterSidebar({
             className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
             onClick={onClose}
           />
-          <div className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-theme-card border-r border-theme-border p-6 overflow-y-auto shadow-2xl animate-slide-in-left">
+          <div ref={drawerRef} className="absolute left-0 top-0 bottom-0 w-80 max-w-[85vw] bg-theme-card border-r border-theme-border p-6 overflow-y-auto shadow-2xl animate-slide-in-left">
             {content}
           </div>
         </div>

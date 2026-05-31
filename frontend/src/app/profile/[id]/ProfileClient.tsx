@@ -26,6 +26,7 @@ import { useAuth } from "@/context/AuthContext";
 import { ContractService, ReputationResult } from "@/services/ContractService";
 import ShareMenu from "@/components/ShareMenu";
 import ProfileSkeleton from "@/components/skeletons/ProfileSkeleton";
+import WalletAddress from "@/components/WalletAddress";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 // Base URL without /api for serving static files
@@ -128,17 +129,13 @@ export default function ProfileClient() {
             size={16}
             className={
               s <= rating
-                ? "fill-yellow-400 text-yellow-400"
+                ? "fill-theme-warning text-theme-warning"
                 : "text-theme-border"
             }
           />
         ))}
       </div>
     );
-  };
-
-  const truncateAddress = (address: string) => {
-    return `${address.slice(0, 6)}...${address.slice(-4)}`;
   };
 
   const getProfileCompleteness = (prof: UserProfile) => {
@@ -201,7 +198,7 @@ export default function ProfileClient() {
             )}
             <ShareMenu
               title={profile.username}
-              url={typeof window !== "undefined" ? window.location.href : ""}
+              url={`/profile/${profile.id}`}
               description={`Check out ${profile.username}'s profile on StellarMarket`}
             />
           </div>
@@ -231,9 +228,7 @@ export default function ProfileClient() {
           <div className="flex flex-wrap gap-6 text-sm text-theme-text">
             <div className="flex items-center gap-2">
               <ShieldCheck size={18} className="text-stellar-blue" />
-              <span className="font-mono">
-                {truncateAddress(profile.walletAddress)}
-              </span>
+              <WalletAddress address={profile.walletAddress} />
             </div>
             <div className="flex items-center gap-2">
               <Calendar size={18} className="text-stellar-blue" />
@@ -289,7 +284,7 @@ export default function ProfileClient() {
             ) : reputation ? (
               <div>
                 <div className="flex items-center gap-2">
-                  <Star className="text-yellow-400 fill-yellow-400" size={20} />
+                  <Star className="text-theme-warning fill-theme-warning" size={20} />
                   <span className="text-2xl font-bold text-theme-heading">
                     {reputation.score.toFixed(1)} / 5
                   </span>
@@ -333,7 +328,7 @@ export default function ProfileClient() {
                       key={idx}
                       className="text-xs flex items-center gap-2 text-theme-text"
                     >
-                      <AlertCircle size={14} className="text-amber-500" />
+                      <AlertCircle size={14} className="text-theme-warning" />
                       Add {step.label}
                     </li>
                   ))}
@@ -363,7 +358,7 @@ export default function ProfileClient() {
               </div>
               <div className="flex justify-between items-center p-3 bg-theme-bg rounded-lg border border-theme-border">
                 <span className="text-theme-text flex items-center gap-2">
-                  <Star size={18} className="text-yellow-400" /> Reputation
+                  <Star size={18} className="text-theme-warning" /> Reputation
                 </span>
                 <span className="text-theme-heading font-bold">
                   {reputation ? reputation.badgeTier : "No score yet"}
@@ -378,11 +373,11 @@ export default function ProfileClient() {
             </h3>
             <ul className="space-y-3">
               <li className="flex items-center gap-3 text-sm text-theme-text">
-                <ShieldCheck size={18} className="text-green-500" /> Wallet
+                <ShieldCheck size={18} className="text-theme-success" /> Wallet
                 Verified
               </li>
               <li className="flex items-center gap-3 text-sm text-theme-text">
-                <ShieldCheck size={18} className="text-green-500" /> Email
+                <ShieldCheck size={18} className="text-theme-success" /> Email
                 Verified
               </li>
             </ul>

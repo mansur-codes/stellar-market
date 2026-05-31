@@ -64,7 +64,7 @@ function StarRow({ rating }: { rating: number }) {
         <Star
           key={s}
           size={14}
-          className={s <= rating ? "fill-yellow-400 text-yellow-400" : "text-theme-border"}
+          className={s <= rating ? "fill-theme-warning text-theme-warning" : "text-theme-border"}
         />
       ))}
     </div>
@@ -73,8 +73,6 @@ function StarRow({ rating }: { rating: number }) {
 
 export default function PublicProfileClient({ profile }: { profile: PublicProfile }) {
   const [lightbox, setLightbox] = useState<PortfolioItem | null>(null);
-
-  const pageUrl = typeof window !== "undefined" ? window.location.href : "";
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -103,7 +101,7 @@ export default function PublicProfileClient({ profile }: { profile: PublicProfil
             </span>
             <ShareMenu
               title={`${profile.username} on StellarMarket`}
-              url={pageUrl}
+              url={`/profile/${profile.username}`}
               description={`Check out ${profile.username}'s freelancer profile on StellarMarket`}
             />
           </div>
@@ -196,7 +194,7 @@ export default function PublicProfileClient({ profile }: { profile: PublicProfil
               id="reviews-heading"
               className="text-xl font-semibold text-theme-heading mb-4 flex items-center gap-2"
             >
-              <Star size={18} className="text-yellow-400 fill-yellow-400" />
+              <Star size={18} className="text-theme-warning fill-theme-warning" />
               Reviews ({profile.reviewsReceived.length})
             </h2>
             {profile.reviewsReceived.length > 0 ? (
