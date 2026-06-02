@@ -72,6 +72,8 @@ pub enum EscrowError {
     NoFundsToWithdraw = 38,
     /// Proposal has expired.
     ProposalExpired = 39,
+    /// The proposal TTL has not yet elapsed; it cannot be expired yet.
+    ProposalNotExpirable = 40,
 }
 
 /// Privileged actions that can be proposed and approved through the multi-sig flow.
@@ -240,6 +242,8 @@ pub struct Job {
     pub milestones: Vec<Milestone>,
     pub job_deadline: u64,
     pub auto_refund_after: u64,
+    /// Ledger number at which the escrow expires and funds can be auto-released.
+    pub expiry_ledger: u32,
 }
 
 const MAX_FEE_BPS: u32 = 1000; // 10%
@@ -496,6 +500,8 @@ impl EscrowContract {
         admin: Address,
         token: Address,
     ) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         admin.require_auth();
         if !is_signer(&env, &admin) {
             return Err(EscrowError::NotAdmin);
@@ -875,8 +881,8 @@ impl EscrowContract {
         milestones: Vec<(String, i128, u64)>,
         job_deadline: u64,
         auto_refund_after: u64,
+        expiry_ledger: u32,
     ) -> Result<u64, EscrowError> {
-        client.require_auth();
         require_not_paused(&env)?;
 
         let allowed_tokens = Self::get_allowed_tokens(env.clone());
@@ -888,7 +894,13 @@ impl EscrowContract {
             return Err(EscrowError::TokenNotAllowed);
         }
 
+        client.require_auth();
+
         if job_deadline <= env.ledger().timestamp() {
+            return Err(EscrowError::InvalidDeadline);
+        }
+
+        if expiry_ledger <= env.ledger().sequence() {
             return Err(EscrowError::InvalidDeadline);
         }
 
@@ -938,6 +950,7 @@ impl EscrowContract {
             milestones: milestone_vec,
             job_deadline,
             auto_refund_after,
+            expiry_ledger,
         };
 
         env.storage()
@@ -1831,6 +1844,130 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Client releases the full payment for a submitted milestone.
+    ///
+    /// # Authorization
+    /// Only the client may call this function.
+    ///
+    /// # Errors
+    /// * `Unauthorized`   — caller is not the job's client
+    /// * `InvalidStatus`  — job is disputed, or milestone is not Submitted
+    /// * `MilestoneNotFound` — milestone index does not exist
+    pub fn release_milestone(
+        env: Env,
+        job_id: u64,
+        milestone_index: u32,
+        client: Address,
+    ) -> Result<(), EscrowError> {
+        client.require_auth();
+        require_not_paused(&env)?;
+
+        let mut job: Job = env
+            .storage()
+            .persistent()
+            .get(&get_job_key(job_id))
+            .ok_or(EscrowError::JobNotFound)?;
+        bump_job_ttl(&env, job_id);
+
+        if job.client != client {
+            return Err(EscrowError::Unauthorized);
+        }
+        if job.status == JobStatus::Disputed {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        let mut milestones = job.milestones.clone();
+        let milestone = milestones
+            .get(milestone_index)
+            .ok_or(EscrowError::MilestoneNotFound)?;
+
+        if milestone.status != MilestoneStatus::Submitted {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        // Compute fee and net freelancer amount.
+        let token_client = token::Client::new(&env, &job.token);
+        let fee_bps: u32 = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("FEE"))
+            .unwrap_or(0);
+        let treasury: Address = env
+            .storage()
+            .instance()
+            .get(&symbol_short!("TRE"))
+            .unwrap_or(env.current_contract_address());
+
+        let fee_amount = (milestone.amount * fee_bps as i128) / 10_000;
+        let freelancer_amount = milestone.amount - fee_amount;
+
+        if fee_amount > 0 {
+            token_client.transfer(&env.current_contract_address(), &treasury, &fee_amount);
+            env.events().publish(
+                (symbol_short!("escrow"), symbol_short!("fee")),
+                (job_id, milestone_index, fee_amount, treasury.clone()),
+            );
+        }
+
+        token_client.transfer(
+            &env.current_contract_address(),
+            &job.freelancer,
+            &freelancer_amount,
+        );
+
+        let updated = Milestone {
+            id: milestone.id,
+            description: milestone.description.clone(),
+            amount: milestone.amount,
+            status: MilestoneStatus::Approved,
+            deadline: milestone.deadline,
+        };
+        milestones.set(milestone_index, updated);
+        job.milestones = milestones.clone();
+
+        // Check if all milestones are now fully paid.
+        let all_approved = milestones
+            .iter()
+            .all(|m| m.status == MilestoneStatus::Approved);
+        if all_approved {
+            job.status = JobStatus::Completed;
+        }
+
+        env.storage().persistent().set(&get_job_key(job_id), &job);
+        bump_job_ttl(&env, job_id);
+
+        // Clean up auxiliary keys.
+        let submitted_key = DataKey::MilestoneSubmittedAt(job_id, milestone_index);
+        if env.storage().persistent().has(&submitted_key) {
+            env.storage().persistent().remove(&submitted_key);
+        }
+        let auto_key = DataKey::InactivityAutoApproveAt(job_id, milestone_index);
+        if env.storage().persistent().has(&auto_key) {
+            env.storage().persistent().remove(&auto_key);
+        }
+
+        // Emit MilestoneReleased event.
+        env.events().publish(
+            (symbol_short!("escrow"), Symbol::new(&env, "ms_released")),
+            (
+                job_id,
+                milestone_index,
+                client,
+                job.freelancer.clone(),
+                milestone.amount,
+            ),
+        );
+
+        if all_approved {
+            env.events().publish(
+                (symbol_short!("escrow"), Symbol::new(&env, "pmt_released")),
+                (job_id, job.freelancer, freelancer_amount),
+            );
+        }
+
+        Ok(())
+    }
+
     /// Cancel a funded job and refund the full escrowed balance back to the client.
     ///
     /// # Authorization
@@ -1966,6 +2103,91 @@ impl EscrowContract {
         Ok(())
     }
 
+    /// Allows an authorized admin (signer) to issue a partial refund to the client
+    /// from the remaining escrow balance of a job.
+    ///
+    /// The refund amount is deducted from the job's `total_amount` and `funded_amount`
+    /// so that the remaining milestones accurately reflect the updated escrow balance.
+    /// This is useful for dispute resolution or escrow adjustments without cancelling the job.
+    ///
+    /// # Authorization
+    /// Only registered multi-sig signers may call this function.
+    ///
+    /// # Errors
+    /// * `NotAdmin`           — caller is not a registered signer
+    /// * `JobNotFound`        — job does not exist
+    /// * `InvalidStatus`      — job is in a terminal state (Completed, Cancelled, Expired, Created)
+    /// * `InsufficientFunds`  — amount <= 0 or amount > remaining locked balance
+    pub fn partial_refund(
+        env: Env,
+        caller: Address,
+        job_id: u64,
+        amount: i128,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+        require_not_paused(&env)?;
+
+        if !is_signer(&env, &caller) {
+            return Err(EscrowError::NotAdmin);
+        }
+
+        let mut job: Job = env
+            .storage()
+            .persistent()
+            .get(&get_job_key(job_id))
+            .ok_or(EscrowError::JobNotFound)?;
+        bump_job_ttl(&env, job_id);
+
+        // Only allow refund on jobs that actually hold escrowed funds.
+        if job.status != JobStatus::Funded
+            && job.status != JobStatus::InProgress
+            && job.status != JobStatus::Disputed
+        {
+            return Err(EscrowError::InvalidStatus);
+        }
+
+        // Calculate remaining locked balance (total minus already-approved milestones).
+        let approved_amount: i128 = job
+            .milestones
+            .iter()
+            .filter(|m| m.status == MilestoneStatus::Approved)
+            .map(|m| m.amount)
+            .sum();
+        let remaining = job.total_amount - approved_amount;
+
+        if amount <= 0 || amount > remaining {
+            return Err(EscrowError::InsufficientFunds);
+        }
+
+        // Transfer refund to the client.
+        let token_client = token::Client::new(&env, &job.token);
+        token_client.transfer(&env.current_contract_address(), &job.client, &amount);
+
+        // Update escrow state to reflect the refund.
+        job.total_amount = job
+            .total_amount
+            .checked_sub(amount)
+            .ok_or(EscrowError::InsufficientFunds)?;
+        job.funded_amount = job.funded_amount.saturating_sub(amount);
+
+        env.storage().persistent().set(&get_job_key(job_id), &job);
+        bump_job_ttl(&env, job_id);
+
+        // Emit PartialRefund event.
+        env.events().publish(
+            (symbol_short!("escrow"), Symbol::new(&env, "partial_ref")),
+            (
+                job_id,
+                caller,
+                job.client.clone(),
+                amount,
+                job.total_amount,
+            ),
+        );
+
+        Ok(())
+    }
+
     // ============================================================
     // JOB REVISION AND SCOPE RENEGOTIATION
     // ============================================================
@@ -2015,6 +2237,8 @@ impl EscrowContract {
         job_id: u64,
         new_milestones: Vec<Milestone>,
     ) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         caller.require_auth();
 
         // 1. Load the job
@@ -2136,6 +2360,8 @@ impl EscrowContract {
     /// * `NotAuthorizedForProposalAction` — if caller is the proposer or not a party
     /// * `InsufficientTopUp` — if new_total > old_total and top-up transfer fails
     pub fn accept_revision(env: Env, caller: Address, job_id: u64) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         caller.require_auth();
 
         // 1. Load job
@@ -2271,6 +2497,8 @@ impl EscrowContract {
     /// * `ProposalNotPending` — if the proposal is not Pending
     /// * `NotAuthorizedForProposalAction` — if caller is the proposer or not a party
     pub fn reject_revision(env: Env, caller: Address, job_id: u64) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         caller.require_auth();
 
         // 1. Load job
@@ -2378,6 +2606,79 @@ impl EscrowContract {
         env.events().publish(
             (Symbol::new(&env, "revision_cancelled"),),
             (job_id, caller, job.client, job.freelancer),
+        );
+
+        Ok(())
+    }
+
+    /// Allows the original proposer to explicitly expire their own pending revision proposal
+    /// after the configured proposal TTL has elapsed.
+    ///
+    /// # Authorization
+    /// Only the original proposer may call this function.
+    ///
+    /// # Errors
+    /// * `JobNotFound`                     — job does not exist
+    /// * `RevisionProposalNotFound`        — no proposal exists for this job
+    /// * `ProposalNotPending`              — proposal is not in Pending status
+    /// * `NotAuthorizedForProposalAction`  — caller is not the original proposer
+    /// * `ProposalNotExpirable`            — TTL has not yet elapsed
+    pub fn expire_proposal(
+        env: Env,
+        caller: Address,
+        job_id: u64,
+    ) -> Result<(), EscrowError> {
+        caller.require_auth();
+
+        // Validate job exists.
+        let _job: Job = env
+            .storage()
+            .persistent()
+            .get(&get_job_key(job_id))
+            .ok_or(EscrowError::JobNotFound)?;
+        bump_job_ttl(&env, job_id);
+
+        // Load proposal.
+        let mut proposal = env
+            .storage()
+            .persistent()
+            .get::<DataKey, RevisionProposal>(&DataKey::RevisionProposal(job_id))
+            .ok_or(EscrowError::RevisionProposalNotFound)?;
+
+        if proposal.status != ProposalStatus::Pending {
+            return Err(EscrowError::ProposalNotPending);
+        }
+
+        if caller != proposal.proposer {
+            return Err(EscrowError::NotAuthorizedForProposalAction);
+        }
+
+        // Check if the proposal TTL has elapsed.
+        let expiry_secs: u64 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ProposalExpiry)
+            .unwrap_or(DEFAULT_PROPOSAL_EXPIRY_SECS);
+        let now = env.ledger().timestamp();
+        if now < proposal.created_at + expiry_secs {
+            return Err(EscrowError::ProposalNotExpirable);
+        }
+
+        // Mark proposal as Rejected.
+        proposal.status = ProposalStatus::Rejected;
+        env.storage()
+            .persistent()
+            .set(&DataKey::RevisionProposal(job_id), &proposal);
+        env.storage().persistent().extend_ttl(
+            &DataKey::RevisionProposal(job_id),
+            TTL_THRESHOLD_LEDGERS,
+            TTL_EXTEND_TO_LEDGERS,
+        );
+
+        // Emit revision_expired event.
+        env.events().publish(
+            (Symbol::new(&env, "revision_expired"),),
+            (job_id, caller, proposal.proposer),
         );
 
         Ok(())
@@ -2595,3 +2896,6 @@ impl EscrowContract {
 
 #[cfg(test)]
 mod test;
+
+#[cfg(test)]
+mod fuzz;
