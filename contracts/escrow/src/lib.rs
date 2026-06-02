@@ -500,6 +500,8 @@ impl EscrowContract {
         admin: Address,
         token: Address,
     ) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         admin.require_auth();
         if !is_signer(&env, &admin) {
             return Err(EscrowError::NotAdmin);
@@ -2235,6 +2237,8 @@ impl EscrowContract {
         job_id: u64,
         new_milestones: Vec<Milestone>,
     ) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         caller.require_auth();
 
         // 1. Load the job
@@ -2356,6 +2360,8 @@ impl EscrowContract {
     /// * `NotAuthorizedForProposalAction` — if caller is the proposer or not a party
     /// * `InsufficientTopUp` — if new_total > old_total and top-up transfer fails
     pub fn accept_revision(env: Env, caller: Address, job_id: u64) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         caller.require_auth();
 
         // 1. Load job
@@ -2491,6 +2497,8 @@ impl EscrowContract {
     /// * `ProposalNotPending` — if the proposal is not Pending
     /// * `NotAuthorizedForProposalAction` — if caller is the proposer or not a party
     pub fn reject_revision(env: Env, caller: Address, job_id: u64) -> Result<(), EscrowError> {
+        require_not_paused(&env)?;
+
         caller.require_auth();
 
         // 1. Load job
