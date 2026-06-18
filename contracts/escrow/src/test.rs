@@ -1642,6 +1642,7 @@ fn test_pause_and_unpause() {
         &milestones2,
         &JOB_DEADLINE, // job_deadline
         &2500_u64,     // auto_refund_after
+        &DEFAULT_EXPIRY_LEDGER,
     );
     assert_eq!(job_id2, 2);
 }
@@ -2147,7 +2148,7 @@ fn test_fee_deduction_single_approval() {
     let freelancer_receives = milestone_amount - fee;
 
     let milestones = vec![&env, (String::from_str(&env, "Task 1"), milestone_amount, 2000_u64)];
-    let job_id = escrow.create_job(&client_addr, &freelancer, &token, &milestones, &3000_u64, &GRACE_PERIOD);
+    let job_id = escrow.create_job(&client_addr, &freelancer, &token, &milestones, &3000_u64, &GRACE_PERIOD, &DEFAULT_EXPIRY_LEDGER);
 
     mint_tokens(&env, &token, &client_addr, milestone_amount);
     escrow.fund_job(&job_id, &client_addr);
@@ -2192,7 +2193,7 @@ fn test_fee_deduction_batch_approval() {
         (String::from_str(&env, "T1"), m0, 2000_u64),
         (String::from_str(&env, "T2"), m1, 3000_u64),
     ];
-    let job_id = escrow.create_job(&client_addr, &freelancer, &token, &milestones, &5000_u64, &GRACE_PERIOD);
+    let job_id = escrow.create_job(&client_addr, &freelancer, &token, &milestones, &5000_u64, &GRACE_PERIOD, &DEFAULT_EXPIRY_LEDGER);
 
     mint_tokens(&env, &token, &client_addr, total);
     escrow.fund_job(&job_id, &client_addr);

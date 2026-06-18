@@ -1,8 +1,9 @@
+extern crate std;
+
 use soroban_sdk::{
-    contract, contractimpl,
     testutils::{Address as _, Ledger},
     token::StellarAssetClient,
-    vec, Address, Env, IntoVal, String, Vec,
+    vec, Address, Env, String, Vec,
 };
 
 use crate::*;
@@ -79,7 +80,7 @@ fn fuzz_deposit_and_release_basic() {
             let amount = random_i128(&mut seed, 1_000_000);
             let deadline = 1000 + (m as u64 + 1) * 100;
             milestones.push_back((
-                String::from_str(&env, &format!("Milestone {}", m)),
+                String::from_str(&env, &std::format!("Milestone {}", m)),
                 amount,
                 deadline,
             ));
@@ -250,7 +251,7 @@ fn fuzz_refund_flows() {
             let amount = random_i128(&mut seed, 100_000);
             let deadline = 1000 + (m as u64 + 1) * 100;
             milestones.push_back((
-                String::from_str(&env, &format!("Milestone {}", m)),
+                String::from_str(&env, &std::format!("Milestone {}", m)),
                 amount,
                 deadline,
             ));
@@ -337,7 +338,7 @@ fn fuzz_multi_token_scenarios() {
     let num_runs = 50;
 
     for run in 0..num_runs {
-        let token_idx = (random_u32(&mut seed) % 2) as usize;
+        let token_idx = (random_u32(&mut seed) % 2) as u32;
         let token = tokens.get(token_idx).unwrap();
 
         let client = Address::generate(&env);
@@ -354,7 +355,7 @@ fn fuzz_multi_token_scenarios() {
             let amount = random_i128(&mut seed, 100_000);
             let deadline = 1000 + (m as u64 + 1) * 100;
             milestones.push_back((
-                String::from_str(&env, &format!("Milestone {}", m)),
+                String::from_str(&env, &std::format!("Milestone {}", m)),
                 amount,
                 deadline,
             ));
@@ -457,7 +458,7 @@ fn fuzz_approve_milestones_batch() {
             let amount = random_i128(&mut seed, 100_000);
             let deadline = 1000 + (m as u64 + 1) * 100;
             milestones.push_back((
-                String::from_str(&env, &format!("Milestone {}", m)),
+                String::from_str(&env, &std::format!("Milestone {}", m)),
                 amount,
                 deadline,
             ));
@@ -543,7 +544,7 @@ fn fuzz_no_panic_on_edge_cases() {
     let freelancer = Address::generate(&env);
 
     let token_admin = StellarAssetClient::new(&env, &token);
-    token_admin.mint(&client, &i128::MAX / 2);
+    token_admin.mint(&client, &(i128::MAX / 2));
 
     let milestones = vec![
         &env,

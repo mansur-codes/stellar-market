@@ -121,6 +121,7 @@ fn test_happy_path_job_completion_with_reputation() {
         &milestones,
         &DEADLINE,
         &AUTO_REFUND,
+        &518_400u32,
     );
     assert_eq!(job_id, 1);
 
@@ -245,6 +246,7 @@ fn test_dispute_resolved_for_freelancer() {
         &milestones,
         &DEADLINE,
         &AUTO_REFUND,
+        &518_400u32,
     );
     escrow_client.fund_job(&job_id, &client);
 
@@ -353,6 +355,7 @@ fn test_dispute_resolved_for_client() {
         &milestones,
         &DEADLINE,
         &AUTO_REFUND,
+        &518_400u32,
     );
     escrow_client.fund_job(&job_id, &client);
 
@@ -449,6 +452,7 @@ fn test_full_workflow_with_partial_completion_and_cancellation() {
         &milestones,
         &DEADLINE,
         &AUTO_REFUND,
+        &518_400u32,
     );
     escrow_client.fund_job(&job_id, &client);
 
@@ -510,6 +514,7 @@ fn test_multiple_jobs_with_reputation_accumulation() {
         &milestones1,
         &DEADLINE,
         &AUTO_REFUND,
+        &518_400u32,
     );
     escrow_client.fund_job(&job_id1, &client1);
     escrow_client.submit_milestone(&job_id1, &0, &freelancer);
@@ -527,6 +532,7 @@ fn test_multiple_jobs_with_reputation_accumulation() {
         &milestones2,
         &DEADLINE,
         &AUTO_REFUND,
+        &518_400u32,
     );
     escrow_client.fund_job(&job_id2, &client2);
     escrow_client.submit_milestone(&job_id2, &0, &freelancer);
@@ -596,6 +602,7 @@ fn test_dispute_with_all_milestones_approved() {
         &milestones,
         &DEADLINE,
         &AUTO_REFUND,
+        &518_400u32,
     );
     escrow_client.fund_job(&job_id, &client);
 

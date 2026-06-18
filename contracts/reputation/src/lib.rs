@@ -1953,6 +1953,7 @@ mod tests {
                     total_score: 100,
                     total_weight: 10,
                     review_count: 1,
+                    last_updated_ledger: 0,
                 },
             );
         });
@@ -1967,6 +1968,7 @@ mod tests {
                     total_score: 500,
                     total_weight: 50,
                     review_count: 5,
+                    last_updated_ledger: 0,
                 },
             );
         });
@@ -1981,6 +1983,7 @@ mod tests {
                     total_score: 2000,
                     total_weight: 200,
                     review_count: 20,
+                    last_updated_ledger: 0,
                 },
             );
         });
@@ -1995,6 +1998,7 @@ mod tests {
                     total_score: 99,
                     total_weight: 10,
                     review_count: 1,
+                    last_updated_ledger: 0,
                 },
             );
         });
@@ -2026,6 +2030,7 @@ mod tests {
                     total_score: 500,
                     total_weight: 50,
                     review_count: 5,
+                    last_updated_ledger: 0,
                 },
             );
         });
@@ -2069,6 +2074,7 @@ mod tests {
                     total_score: 100,
                     total_weight: 10,
                     review_count: 1,
+                    last_updated_ledger: 0,
                 },
             );
         });

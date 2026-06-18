@@ -41,6 +41,7 @@ fn setup_completed_job(
         &milestones,
         &9999999999u64,
         &86400u64,
+        &518_400u32,
     );
 
     // Fund the job
@@ -74,6 +75,7 @@ fn setup_in_progress_job(
         &milestones,
         &9999999999u64,
         &86400u64,
+        &518_400u32,
     );
 
     // Fund the job to move it to Funded status
@@ -1958,6 +1960,7 @@ fn test_last_updated_ledger_advances_on_write() {
 
     let ledger_after = client.get_reputation(&reviewee).last_updated_ledger;
     assert!(ledger_after > ledger_before);
+}
 
 // ── tier_up event tests (Issue #464) ────────────────────────────────────────
 
