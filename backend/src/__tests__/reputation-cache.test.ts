@@ -5,8 +5,17 @@ import RedisClient from "../lib/redis";
 
 // Mock dependencies
 jest.mock("../lib/redis");
-jest.mock("../lib/logger");
 jest.mock("@stellar/stellar-sdk");
+
+// Mock logger with actual implementation
+jest.mock("../lib/logger", () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+}));
 
 describe("ReputationCacheService", () => {
   beforeEach(() => {
