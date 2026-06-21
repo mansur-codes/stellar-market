@@ -187,6 +187,11 @@ pub struct Dispute {
     pub excluded_voters: Vec<Address>,
     /// List of arbitrators assigned to this dispute (randomly selected at creation)
     pub assigned_arbitrators: Vec<Address>,
+    /// Incremental tally accumulator for O(1) verdict finalization.
+    /// This is the authoritative source for vote weights during resolution.
+    pub tally: DisputeTally,
+    /// Number of arbitrators assigned to this dispute (max 7).
+    pub arbitrator_count: u32,
 }
 
 #[contracttype]
@@ -214,6 +219,10 @@ enum DataKey {
     LastDisputeLedger(Address, Address),
     /// Admin-configurable cooldown duration in ledgers between disputes for the same party pair.
     CooldownDuration,
+    /// Stores the DisputeTally for O(1) verdict finalization.
+    DisputeTally(u64),
+    /// Stores assigned arbitrators for a dispute: dispute_id → Vec<Address>
+    Arbitrators(u64),
     /// Pool of eligible arbitrators that can be randomly selected for disputes
     ArbitratorPool,
     /// Maps dispute_id → appeal_id (one appeal per dispute).
@@ -349,6 +358,37 @@ fn bump_last_dispute_ledger_ttl(env: &Env, client: &Address, freelancer: &Addres
         MIN_TTL_THRESHOLD,
         MIN_TTL_EXTEND_TO,
     );
+}
+
+fn bump_dispute_tally_ttl(env: &Env, dispute_id: u64) {
+    env.storage().persistent().extend_ttl(
+        &DataKey::DisputeTally(dispute_id),
+        MIN_TTL_THRESHOLD,
+        MIN_TTL_EXTEND_TO,
+    );
+}
+
+fn bump_arbitrators_ttl(env: &Env, dispute_id: u64) {
+    env.storage().persistent().extend_ttl(
+        &DataKey::Arbitrators(dispute_id),
+        MIN_TTL_THRESHOLD,
+        MIN_TTL_EXTEND_TO,
+    );
+}
+
+/// Creates a default (zeroed) DisputeTally for a new dispute.
+fn new_tally() -> DisputeTally {
+    DisputeTally {
+        client_weight: 0,
+        freelancer_weight: 0,
+        total_weight_cast: 0,
+        vote_count: 0,
+        refund_split_weight: 0,
+        refund_split_sum: 0,
+        refund_split_count: 0,
+        malicious_weight: 0,
+        malicious_count: 0,
+    }
 }
 
 fn bump_appeal_ttl(env: &Env, appeal_id: u64) {
@@ -830,6 +870,8 @@ impl DisputeContract {
             voting_deadline: env.ledger().timestamp().saturating_add(VOTING_PERIOD_SECS),
             excluded_voters,
             assigned_arbitrators: assigned_arbitrators.clone(),
+            tally: new_tally(),
+            arbitrator_count: assigned_arbitrators.len() as u32,
         };
 
         env.storage()
@@ -998,7 +1040,7 @@ impl DisputeContract {
             .storage()
             .persistent()
             .get(&DataKey::DisputeTally(dispute_id))
-            .unwrap_or_else(new_tally);
+            .unwrap_or_else(|| new_tally());
         bump_dispute_tally_ttl(&env, dispute_id);
 
         // For now, weight = 1 for each vote (uniform weighting).
@@ -1020,6 +1062,11 @@ impl DisputeContract {
             VoteChoice::MaliciousFiling => {
                 tally.malicious_weight = tally.malicious_weight.saturating_add(vote_weight);
                 tally.malicious_count += 1;
+            }
+            VoteChoice::SplitAward(_client_bps, _freelancer_bps) => {
+                // SplitAward votes are counted separately in votes_for_split_award
+                // The tally tracks them as a distinct vote category
+                tally.refund_split_weight = tally.refund_split_weight.saturating_add(vote_weight);
             }
         }
 
@@ -1843,17 +1890,6 @@ impl DisputeContract {
             .instance()
             .get(&DataKey::ArbitratorPool)
             .unwrap_or(Vec::new(&env))
-    }
-
-    /// Get the assigned arbitrators for a specific dispute.
-    pub fn get_assigned_arbitrators(env: Env, dispute_id: u64) -> Result<Vec<Address>, DisputeError> {
-        let dispute: Dispute = env
-            .storage()
-            .persistent()
-            .get(&DataKey::Dispute(dispute_id))
-            .ok_or(DisputeError::DisputeNotFound)?;
-        bump_dispute_ttl(&env, dispute_id);
-        Ok(dispute.assigned_arbitrators)
     }
 }
 
