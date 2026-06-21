@@ -14,6 +14,8 @@ import { z, ZodError } from "zod";
 import { logAdminAction } from "../utils/auditLogger";
 import { NotificationService } from "../services/notification.service";
 import { validate } from "../middleware/validation";
+import { projectJobState } from "../services/escrow-projection.service";
+import { ReputationCacheService } from "../services/reputation-cache.service";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -622,7 +624,234 @@ router.get("/users/flagged", async (req: AuthRequest, res: Response): Promise<vo
             res.status(400).json({ error: "Validation error", details: error.issues });
             return;
         }
+        console.error("Error fetching users:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/admin/disputes
+ * List all disputes with escalation status
+ */
+router.get("/disputes", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const disputes = await prisma.dispute.findMany({
+            include: {
+                job: {
+                    select: {
+                        id: true,
+                        title: true,
+                        clientId: true,
+                        freelancerId: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        res.json({ disputes });
+    } catch (error) {
+        console.error("Error fetching disputes:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/admin/disputes/pending
+ * List pending disputes for review
+ */
+router.get("/disputes/pending", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const disputes = await prisma.dispute.findMany({
+            where: { status: DisputeStatus.OPEN },
+            include: {
+                job: {
+                    select: {
+                        id: true,
+                        title: true,
+                        clientId: true,
+                        freelancerId: true,
+                    },
+                },
+            },
+            orderBy: { createdAt: "desc" },
+        });
+
+        res.json({ disputes });
+    } catch (error) {
+        console.error("Error fetching pending disputes:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * PATCH /api/admin/disputes/:id/override
+ * Override dispute outcome
+ */
+router.patch("/disputes/:id/override", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const id = req.params.id as string;
+        const { outcome, status } = overrideDisputeSchema.parse(req.body);
+
+        const dispute = await prisma.dispute.findUnique({ where: { id } });
+        if (!dispute) {
+            res.status(404).json({ error: "Dispute not found" });
+            return;
+        }
+
+        const updatedDispute = await prisma.dispute.update({
+            where: { id },
+            data: {
+                outcome,
+                status: status as DisputeStatus,
+                resolvedAt: new Date(),
+            },
+        });
+
+        await logAdminAction(req.userId!, "OVERRIDE_DISPUTE", id, {
+            outcome,
+            status
+        });
+
+        res.json({
+            message: "Dispute outcome overridden successfully",
+            dispute: updatedDispute,
+        });
+    } catch (error) {
+        if (error instanceof ZodError) {
+            res.status(400).json({ error: "Validation error", details: error.issues });
+            return;
+        }
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/admin/audit-log
+ * Paginated log of all admin actions
+ */
+router.get("/audit-log", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const skip = (page - 1) * limit;
+
+        const [logs, total] = await Promise.all([
+            prisma.auditLog.findMany({
+                skip,
+                take: limit,
+                include: {
+                    admin: {
+                        select: {
+                            id: true,
+                            username: true,
+                        },
+                    },
+                },
+                orderBy: { timestamp: "desc" },
+            }),
+            prisma.auditLog.count(),
+        ]);
+
+        res.json({
+            logs,
+            pagination: {
+                total,
+                page,
+                limit,
+                totalPages: Math.ceil(total / limit),
+            },
+        });
+    } catch (error) {
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/admin/flagged
+ * List all flagged jobs and suspended users (Upstream merge)
+ */
+router.get("/flagged", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const [flaggedJobs, suspendedUsers] = await Promise.all([
+            prisma.job.findMany({
+                where: { isFlagged: true },
+                include: {
+                    client: {
+                        select: { id: true, username: true, walletAddress: true },
+                    },
+                },
+                orderBy: { flaggedAt: "desc" },
+            }),
+            prisma.user.findMany({
+                where: { isSuspended: true },
+                select: { id: true, username: true, walletAddress: true, suspendReason: true, suspendedAt: true },
+                orderBy: { suspendedAt: "desc" },
+            }),
+        ]);
+
+        res.json({
+            flaggedJobs: flaggedJobs.map((job) => ({
+                id: job.id,
+                title: job.title,
+                client: job.client,
+                flagReason: job.flagReason,
+                flaggedAt: job.flaggedAt,
+            })),
+            suspendedUsers: suspendedUsers,
+        });
+    } catch (error) {
+        console.error("Error fetching flagged content:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/admin/users/flagged
+ * List all flagged/suspended users
+ */
+router.get("/users/flagged", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const users = await prisma.user.findMany({
+            where: { isSuspended: true },
+            select: {
+                id: true,
+                username: true,
+                walletAddress: true,
+                suspendReason: true,
+                suspendedAt: true,
+            },
+            orderBy: { suspendedAt: "desc" },
+        });
+
+        res.json({ users });
+    } catch (error) {
         console.error("Error fetching flagged users:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+/**
+ * GET /api/admin/stats
+ * Get moderation statistics (Upstream merge)
+ */
+router.get("/stats", async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+        const [totalJobs, flaggedJobs, totalUsers, suspendedUsers] = await Promise.all([
+            prisma.job.count(),
+            prisma.job.count({ where: { isFlagged: true } }),
+            prisma.user.count(),
+            prisma.user.count({ where: { isSuspended: true } }),
+        ]);
+
+        res.json({
+            totalJobs,
+            flaggedJobs,
+            totalUsers,
+            suspendedUsers,
+        });
+    } catch (error) {
+        console.error("Error fetching stats:", error);
         res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -898,6 +1127,129 @@ router.patch(
       res.status(500).json({ error: "Internal server error" });
     }
   },
+);
+
+/**
+ * GET /api/admin/jobs/:id/event-log
+ * Retrieve the full event log for a job
+ */
+router.get(
+  "/jobs/:id/event-log",
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      const job = await prisma.job.findUnique({ where: { id } });
+      if (!job) {
+        res.status(404).json({ error: "Job not found" });
+        return;
+      }
+      const events = await prisma.escrowEvent.findMany({
+        where: { jobId: id },
+        orderBy: { ledgerSeq: "asc" },
+      });
+      res.json({ events });
+    } catch (error) {
+      console.error("Error fetching event log:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+/**
+ * POST /api/admin/jobs/:id/reproject
+ * Reproject all events for a job and materialize the result
+ */
+router.post(
+  "/jobs/:id/reproject",
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const id = req.params.id as string;
+      const job = await prisma.job.findUnique({ where: { id } });
+      if (!job) {
+        res.status(404).json({ error: "Job not found" });
+        return;
+      }
+
+      const nextState = await projectJobState(id);
+      const updatedJob = await prisma.job.update({
+        where: { id },
+        data: nextState,
+      });
+
+      await logAdminAction(req.userId!, "REPROJECT_JOB_STATE", id, {
+        previousState: { status: job.status, escrowStatus: job.escrowStatus },
+        nextState,
+      });
+
+      res.json({
+        message: "Job state reprojected successfully",
+        job: updatedJob,
+      });
+    } catch (error) {
+      console.error("Error reprojecting job state:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  },
+);
+
+/**
+ * POST /api/admin/reputation-cache/invalidate/:walletAddress
+ * Manually invalidate reputation cache for a specific wallet address
+ */
+router.post(
+  "/reputation-cache/invalidate/:walletAddress",
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const { walletAddress } = req.params;
+
+      if (!walletAddress || Array.isArray(walletAddress)) {
+        res.status(400).json({ error: "Invalid wallet address" });
+        return;
+      }
+
+      await ReputationCacheService.invalidateCache(walletAddress);
+
+      await logAdminAction(
+        req.userId!,
+        "CACHE_INVALIDATE",
+        walletAddress,
+        { walletAddress }
+      );
+
+      res.json({
+        message: "Reputation cache invalidated successfully",
+        walletAddress,
+      });
+    } catch (error) {
+      console.error("Error invalidating reputation cache:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/reputation-cache/stats
+ * Get reputation cache statistics
+ */
+router.get(
+  "/reputation-cache/stats",
+  async (req: AuthRequest, res: Response): Promise<void> => {
+    try {
+      const stats = await ReputationCacheService.getCacheStats();
+
+      res.json({
+        stats: {
+          cachedEntries: stats.cachedEntries,
+          isWarmedUp: stats.isWarmedUp,
+          circuitBreakerStatus: stats.circuitBreakerStatus,
+          hitRate: stats.hitRate,
+        },
+      });
+    } catch (error) {
+      console.error("Error getting reputation cache stats:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  }
 );
 
 export default router;

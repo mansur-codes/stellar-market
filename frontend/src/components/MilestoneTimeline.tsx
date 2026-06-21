@@ -134,7 +134,7 @@ export default function MilestoneTimeline({
             const isActioning = actioningMilestoneId === milestone.id;
             const approvedPulse = recentlyApprovedMilestoneId === milestone.id;
             const milestoneOverdue = isOverdue(
-              milestone.deadline || milestone.contractDeadline,
+              milestone.contractDeadline,
             );
             const indicatorClasses = getIndicatorClasses(
               milestone.status,
@@ -142,7 +142,7 @@ export default function MilestoneTimeline({
               milestoneOverdue,
             );
             const deadlineText = formatDeadline(
-              milestone.deadline || milestone.contractDeadline,
+              milestone.contractDeadline,
             );
 
             return (
@@ -183,7 +183,7 @@ export default function MilestoneTimeline({
                         <span className="text-xs text-theme-text">
                           {milestone.amount.toLocaleString()} XLM
                         </span>
-                        {(milestone.deadline || milestone.contractDeadline) && (
+                        {(milestone.contractDeadline) && (
                           <span
                             className={`text-xs flex items-center gap-1 ${
                               milestoneOverdue &&

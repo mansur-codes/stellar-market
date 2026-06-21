@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ShieldCheck, Users } from "lucide-react";
 import { useDisputeStatus } from "@/hooks/useDisputeStatus";
+import type { Vote } from "@/types";
 
 interface DisputeVoteProgressProps {
   disputeId: string;
@@ -148,7 +149,7 @@ export default function DisputeVoteProgress({
         <div className="mt-4 pt-4 border-t border-theme-border">
           <p className="text-xs text-theme-text mb-2 font-medium">Recent Voters (Anonymized)</p>
           <div className="flex flex-wrap gap-2">
-            {dispute.votes.slice(-5).map((vote) => (
+            {dispute.votes.slice(-5).map((vote: Vote) => (
               <span 
                 key={vote.id}
                 className={`text-xs px-2 py-1 rounded-full border ${
@@ -157,7 +158,7 @@ export default function DisputeVoteProgress({
                     : 'bg-theme-warning/10 border-theme-warning/30 text-theme-warning'
                 }`}
               >
-                {anonymizeAddress(vote.voter.walletAddress)}
+                {anonymizeAddress(vote.voter.walletAddress ?? "")}
               </span>
             ))}
           </div>

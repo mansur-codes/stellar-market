@@ -308,7 +308,7 @@ export default function AuthForm({ type }: AuthFormProps) {
                 {!address && (
                   <button
                     type="button"
-                    onClick={connect}
+                    onClick={() => connect()}
                     disabled={isConnecting}
                     className="btn-primary py-2 px-4 text-sm flex items-center gap-2 disabled:opacity-60"
                   >

@@ -190,6 +190,14 @@
                   "map": [
                     {
                       "key": {
+                        "symbol": "assigned_arbitrators"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "client"
                       },
                       "val": {
@@ -326,6 +334,14 @@
                     },
                     {
                       "key": {
+                        "symbol": "votes_for_split_award"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "voting_deadline"
                       },
                       "val": {
@@ -378,6 +394,14 @@
                 "durability": "persistent",
                 "val": {
                   "map": [
+                    {
+                      "key": {
+                        "symbol": "assigned_arbitrators"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
                     {
                       "key": {
                         "symbol": "client"
@@ -509,6 +533,14 @@
                     {
                       "key": {
                         "symbol": "votes_for_refund_split"
+                      },
+                      "val": {
+                        "u32": 0
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "votes_for_split_award"
                       },
                       "val": {
                         "u32": 0
@@ -1452,6 +1484,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                },
+                {
+                  "vec": []
                 }
               ]
             }
@@ -1805,6 +1840,9 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                },
+                {
+                  "vec": []
                 }
               ]
             }

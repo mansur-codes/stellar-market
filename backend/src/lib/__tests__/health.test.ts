@@ -36,6 +36,7 @@ describe("getHealthStatus", () => {
     expect(result).toEqual({
       status: "ok",
       service: "stellarmarket-api",
+      uptime: expect.any(Number),
       checks: {
         database: "ok",
         redis: "ok",

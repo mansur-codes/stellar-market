@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useContext } from "react";
 import {
   Bookmark,
   BookmarkCheck,
@@ -14,7 +13,7 @@ import {
 import StatusBadge from "./StatusBadge";
 import EscrowStatusBadge from "./EscrowStatusBadge";
 import { Job, User as UserType } from "@/types";
-import { AuthContext } from "@/context/AuthContext";
+import { useAuth } from "@/context/AuthContext";
 
 interface JobCardProps {
   job: Job;
@@ -71,7 +70,7 @@ export default function JobCard({
   onToggleSave,
   onTagClick,
 }: JobCardProps) {
-  const authUser = useContext(AuthContext)?.user ?? null;
+  const authUser = useAuth().user ?? null;
   const user = viewer ?? authUser;
   const isFreelancer = user?.role === "FREELANCER";
   const isClient = user?.role === "CLIENT";
@@ -107,7 +106,7 @@ export default function JobCard({
           {canSave && (
             <button
               type="button"
-              onClick={() => void onToggleSave(job)}
+              onClick={() => void onToggleSave?.(job)}
               className={`inline-flex items-center justify-center rounded-full border px-2.5 py-2 text-xs font-medium transition-colors ${
                 isSaved
                   ? "border-stellar-blue/30 bg-stellar-blue/10 text-stellar-blue"

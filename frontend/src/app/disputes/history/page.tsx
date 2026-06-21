@@ -21,6 +21,8 @@ interface DisputeHistoryItem extends Dispute {
   jobTitle: string;
   otherPartyName: string;
   otherPartyAvatar: string;
+  resolvedAt?: string;
+  outcome?: string;
 }
 
 export default function DisputeHistoryPage() {
@@ -292,7 +294,7 @@ export default function DisputeHistoryPage() {
                   </div>
 
                   {/* Right Section - Outcome */}
-                  {dispute.status === "RESOLVED" && dispute.outcome && (
+                  {(dispute.status === "RESOLVED_CLIENT" || dispute.status === "RESOLVED_FREELANCER") && dispute.outcome && (
                     <div className="md:w-48 p-4 bg-theme-success/10 rounded-lg border border-theme-success/20">
                       <p className="text-xs text-theme-success uppercase tracking-wide font-semibold mb-2">
                         Resolution
@@ -323,7 +325,7 @@ export default function DisputeHistoryPage() {
           <div className="card p-4 text-center">
             <p className="text-2xl font-bold text-theme-warning">
               {
-                filteredDisputes.filter((d) => d.status === "IN_PROGRESS")
+                filteredDisputes.filter((d) => d.status === "VOTING")
                   .length
               }
             </p>
@@ -333,7 +335,7 @@ export default function DisputeHistoryPage() {
           </div>
           <div className="card p-4 text-center">
             <p className="text-2xl font-bold text-theme-success">
-              {filteredDisputes.filter((d) => d.status === "RESOLVED").length}
+              {filteredDisputes.filter((d) => d.status === "RESOLVED_CLIENT" || d.status === "RESOLVED_FREELANCER").length}
             </p>
             <p className="text-sm text-theme-text-secondary mt-1">Resolved</p>
           </div>

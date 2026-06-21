@@ -91,6 +91,9 @@
                 },
                 {
                   "u64": 86400
+                },
+                {
+                  "u32": 518400
                 }
               ]
             }
@@ -273,10 +276,29 @@
                     },
                     {
                       "key": {
+                        "symbol": "expiry_ledger"
+                      },
+                      "val": {
+                        "u32": 518400
+                      }
+                    },
+                    {
+                      "key": {
                         "symbol": "freelancer"
                       },
                       "val": {
                         "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "funded_amount"
+                      },
+                      "val": {
+                        "i128": {
+                          "hi": 0,
+                          "lo": 100
+                        }
                       }
                     },
                     {
@@ -392,7 +414,7 @@
             },
             "ext": "v0"
           },
-          4095
+          518400
         ]
       ],
       [
@@ -437,7 +459,7 @@
             },
             "ext": "v0"
           },
-          4095
+          6311999
         ]
       ],
       [
@@ -847,7 +869,7 @@
             },
             "ext": "v0"
           },
-          4095
+          6311999
         ]
       ]
     ]
@@ -1116,6 +1138,9 @@
                 },
                 {
                   "u64": 86400
+                },
+                {
+                  "u32": 518400
                 }
               ]
             }
@@ -1149,6 +1174,15 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 100
+                  }
                 }
               ]
             }
@@ -1327,6 +1361,18 @@
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                },
+                {
+                  "address": "CACMVW2KK4H5FZDFF2AUCAKQTEJMZZWJUIZF23XMRVYQBSXYLHZ6BKWN"
+                },
+                {
+                  "i128": {
+                    "hi": 0,
+                    "lo": 100
+                  }
                 }
               ]
             }
@@ -1468,10 +1514,29 @@
                 },
                 {
                   "key": {
+                    "symbol": "expiry_ledger"
+                  },
+                  "val": {
+                    "u32": 518400
+                  }
+                },
+                {
+                  "key": {
                     "symbol": "freelancer"
                   },
                   "val": {
                     "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  }
+                },
+                {
+                  "key": {
+                    "symbol": "funded_amount"
+                  },
+                  "val": {
+                    "i128": {
+                      "hi": 0,
+                      "lo": 100
+                    }
                   }
                 },
                 {
