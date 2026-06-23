@@ -91,6 +91,7 @@ enum NotificationType {
   DISPUTE_RESOLVED
   NEW_MESSAGE
   BADGE_AWARDED
+  ESCROW_TTL_WARNING
 }
 
 enum BadgeTier {
