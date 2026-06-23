@@ -16,6 +16,7 @@ export const config = {
     disputeContractId: process.env.DISPUTE_CONTRACT_ID || "",
     reputationContractId: process.env.REPUTATION_CONTRACT_ID || "",
     nativeTokenId: process.env.NATIVE_TOKEN_ID || "CDLZFC3SYJYDZT7K67VZ75YJBMKBAV27Z6Y6Z6Z6Z6Z6Z6Z6Z6Z6Z6Z6Z", // Native XLM on Testnet
+    keeperSecretKey: process.env.KEEPER_SECRET_KEY || "",
   },
   smtp: {
     host: process.env.SMTP_HOST || "smtp.gmail.com",
