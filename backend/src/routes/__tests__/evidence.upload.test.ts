@@ -15,6 +15,9 @@ jest.mock("@prisma/client", () => {
     attachment: {
       create: jest.fn().mockResolvedValue({ id: "123", size: 1024 }),
     },
+    user: {
+      findUnique: jest.fn().mockResolvedValue({ role: "CLIENT", emailVerified: true }),
+    },
   };
   return { PrismaClient: jest.fn(() => mockPrisma) };
 });
