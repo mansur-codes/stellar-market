@@ -313,6 +313,48 @@ async function handleBadgeAwarded(event: SorobanEvent): Promise<void> {
   logger.info({ walletAddress, tier }, "[HorizonListener] BadgeAwarded - cache invalidated");
 }
 
+/**
+ * escrow / paused — Paused { paused_by: Address }
+ */
+async function handleContractPaused(event: SorobanEvent): Promise<void> {
+  const data = scValToNative(event.value) as Record<string, unknown>;
+  const pausedBy = String(data?.paused_by ?? "");
+
+  // Mark all active jobs as paused in PostgreSQL
+  await prisma.job.updateMany({
+    where: {
+      status: {
+        in: ["CREATED", "FUNDED", "IN_PROGRESS", "DISPUTED"],
+      },
+    },
+    data: {
+      contractPaused: true,
+    },
+  });
+
+  logger.info({ pausedBy, ledger: event.ledger }, "[HorizonListener] ContractPaused");
+}
+
+/**
+ * escrow / unpaused — Unpaused { unpaused_by: Address }
+ */
+async function handleContractUnpaused(event: SorobanEvent): Promise<void> {
+  const data = scValToNative(event.value) as Record<string, unknown>;
+  const unpausedBy = String(data?.unpaused_by ?? "");
+
+  // Unmark all paused jobs
+  await prisma.job.updateMany({
+    where: {
+      contractPaused: true,
+    },
+    data: {
+      contractPaused: false,
+    },
+  });
+
+  logger.info({ unpausedBy, ledger: event.ledger }, "[HorizonListener] ContractUnpaused");
+}
+
 // ─── event dispatch ───────────────────────────────────────────────────────────
 
 async function resolvePreRegisteredTx(txHash: string, ledger: number): Promise<void> {
@@ -337,6 +379,8 @@ async function processEvent(event: SorobanEvent): Promise<void> {
       if (name === "created") return await handleJobCreated(event);
       if (name === "funded") return await handleJobFunded(event);
       if (name === "pmt_released") return await handlePaymentReleased(event);
+      if (name === "paused")       return await handleContractPaused(event);
+      if (name === "unpaused")     return await handleContractUnpaused(event);
     }
 
     if (contract === "dispute") {
