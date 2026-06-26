@@ -9,7 +9,7 @@ import { searchFreelancers } from "../services/freelancer-search.service";
 import { ReputationService } from "../services/reputation.service";
 import { fetchOnChainPayments } from "../services/earnings-reconciliation.service";
 import { logger } from "../lib/logger";
-import { config } from "../config";
+import { config, MAX_PAGE_SIZE } from "../config";
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -44,6 +44,57 @@ function escapeCsv(value: string | number | null | undefined): string {
   }
   return str;
 }
+
+/**
+ * GET /api/freelancers/me/saved-jobs
+ * List saved jobs with pagination
+ */
+router.get(
+  "/me/saved-jobs",
+  authenticate,
+  validate({
+    query: z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(10),
+    }),
+  }),
+  asyncHandler(async (req: AuthRequest, res: Response) => {
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    if (!user || user.role !== "FREELANCER") {
+      return res.status(403).json({ error: "Only freelancers can access saved jobs" });
+    }
+
+    const { page, limit } = req.query as unknown as { page: number; limit: number };
+    const skip = (page - 1) * limit;
+
+    const [savedJobs, total] = await Promise.all([
+      prisma.savedJob.findMany({
+        where: { freelancerId: req.userId },
+        include: {
+          job: {
+            include: {
+              client: { select: { username: true, avatarUrl: true, averageRating: true } },
+            },
+          },
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+      }),
+      prisma.savedJob.count({ where: { freelancerId: req.userId } }),
+    ]);
+
+    res.json({
+      savedJobs,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
+    });
+  }),
+);
 
 /**
  * GET /api/freelancers/earnings
@@ -578,6 +629,7 @@ router.get(
 
     const total = await prisma.user.count({ where });
 
+    res.setHeader("X-Max-Page-Size", String(MAX_PAGE_SIZE));
     res.json({
       data: freelancersWithReputation,
       pagination: {
@@ -616,6 +668,7 @@ router.get(
       skills: q.skills,
     });
 
+    res.setHeader("X-Max-Page-Size", String(MAX_PAGE_SIZE));
     res.json(result);
   })
 );
