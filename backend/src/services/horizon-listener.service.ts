@@ -581,13 +581,20 @@ async function processEvent(event: SorobanEvent): Promise<void> {
       if (name === "unpaused")     return await handleContractUnpaused(event);
     }
 
-  if (contract === "dispute") {
-    if (name === "raised") return await handleDisputeOpened(event);
-    if (name === "resolved") return await handleDisputeResolved(event);
-  }
+    if (contract === "dispute") {
+      if (name === "raised") return await handleDisputeOpened(event);
+      if (name === "resolved") return await handleDisputeResolved(event);
+    }
 
-  if (contract === "reput") {
-    if (name === "badge") return await handleBadgeAwarded(event);
+    if (contract === "reput") {
+      if (name === "badge") return await handleBadgeAwarded(event);
+    }
+  } catch (err) {
+    logger.error(
+      { err, contract, name, ledger: event.ledger },
+      "[HorizonListener] processEvent handler threw",
+    );
+    throw err; // re-throw so processEventWithRetry can handle retries/DLQ
   }
 }
 
