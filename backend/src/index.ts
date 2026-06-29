@@ -246,7 +246,13 @@ async function startServer(): Promise<void> {
 }
 
 async function gracefulShutdown(signal: string): Promise<void> {
-  logger.info({ signal }, "Shutting down gracefully");
+  logger.info(`${signal} received — shutting down gracefully`);
+
+  // Force exit after 30 seconds if shutdown stalls
+  const forceExit = setTimeout(() => {
+    logger.error("Forced exit after timeout");
+    process.exit(1);
+  }, 30_000);
 
   stopHorizonListener();
   RecommendationQueueService.stopWorker();
@@ -257,8 +263,10 @@ async function gracefulShutdown(signal: string): Promise<void> {
     await import("./services/notification.service");
   await NotificationService.flushAllBatches();
 
-  httpServer.close(() => {
-    logger.info("Server closed");
+  httpServer.close(async () => {
+    await prisma.$disconnect();
+    logger.info("Shutdown complete");
+    clearTimeout(forceExit);
     process.exit(0);
   });
 }
