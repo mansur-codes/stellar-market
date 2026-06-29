@@ -95,6 +95,10 @@ pub enum ReputationError {
     // A future-dated bonus would keep `get_decay_factor` at `elapsed_seconds = 0`,
     // permanently exempting it from decay and inflating the score (issue #781).
     InvalidTimestamp = 24,
+    // Rejected when a decay rate exceeds the configured maximum. An unbounded
+    // decay rate (e.g. 99%) would wipe out the leaderboard in a single period
+    // and make reputation meaningless (issue #783).
+    DecayRateTooHigh = 25,
 }
 
 #[contracttype]
@@ -249,6 +253,9 @@ enum DataKey {
     Badges(Address),
     Admin, // Legacy
     DecayRate,
+    // Configurable upper bound for `DecayRate`, settable by a super-admin up to
+    // `MAX_DECAY_RATE_HARD_CEILING`. Falls back to `MAX_DECAY_RATE` when unset.
+    MaxDecayRate,
     MinStake,
     RateLimit,
     LastReviewLedger(Address),
@@ -296,12 +303,29 @@ fn is_signer(env: &Env, address: &Address) -> bool {
     }
 }
 
+/// Effective upper bound for the reputation decay rate: the super-admin
+/// configured value if present, otherwise the `MAX_DECAY_RATE` default.
+fn effective_max_decay_rate(env: &Env) -> u32 {
+    env.storage()
+        .instance()
+        .get(&DataKey::MaxDecayRate)
+        .unwrap_or(MAX_DECAY_RATE)
+}
+
 const MIN_REVIEW_STAKE_DEFAULT: i128 = 10_000_000; // 1.0 unit (7 decimals)
 const RATE_LIMIT_LEDGERS_DEFAULT: u32 = 120; // ~10 minutes
 const DEFAULT_REFERRAL_BONUS: u64 = 5; // Equivalates to a 5-star review bonus
 /// Weight used when crediting referral bonus to reputation (not min review stake).
 const REFERRAL_BONUS_REPUTATION_WEIGHT: u64 = 1;
 const ONE_YEAR_IN_SECONDS: u64 = 31_536_000;
+
+/// Default upper bound for the annual reputation `decay_rate` (percent per year).
+/// 20% keeps decay meaningful without destroying accumulated reputation in a
+/// single period. The super-admin can raise this via `set_max_decay_rate` up to
+/// `MAX_DECAY_RATE_HARD_CEILING` (issue #783).
+const MAX_DECAY_RATE: u32 = 20;
+/// Absolute ceiling the configurable maximum decay rate can never exceed.
+const MAX_DECAY_RATE_HARD_CEILING: u32 = 50;
 
 const MIN_TTL_THRESHOLD: u32 = 50_000_000;
 const MIN_TTL_EXTEND_TO: u32 = 50_000_000;
@@ -929,6 +953,68 @@ impl ReputationContract {
         Ok(())
     }
 
+    /// Update the annual reputation `decay_rate` (percent per year).
+    ///
+    /// Restricted to registered multi-sig signers.
+    ///
+    /// Security (issue #783): the rate is bounded by the configurable maximum
+    /// (`effective_max_decay_rate`, default `MAX_DECAY_RATE`). Without an upper
+    /// bound, a rate such as 99 would erase ~99% of every score within a year,
+    /// emptying the leaderboard and rendering reputation meaningless. Values
+    /// above the maximum are rejected with `DecayRateTooHigh`.
+    pub fn update_decay_rate(
+        env: Env,
+        signer: Address,
+        decay_rate: u32,
+    ) -> Result<(), ReputationError> {
+        signer.require_auth();
+        if !is_signer(&env, &signer) {
+            return Err(ReputationError::NotAdmin);
+        }
+        if decay_rate > effective_max_decay_rate(&env) {
+            return Err(ReputationError::DecayRateTooHigh);
+        }
+        env.storage().instance().set(&DataKey::DecayRate, &decay_rate);
+        bump_instance_ttl(&env);
+
+        env.events().publish(
+            (symbol_short!("reput"), symbol_short!("decay_set")),
+            decay_rate,
+        );
+
+        Ok(())
+    }
+
+    /// Set the configurable maximum allowed `decay_rate` (super-admin only).
+    ///
+    /// Restricted to registered multi-sig signers and itself capped at
+    /// `MAX_DECAY_RATE_HARD_CEILING` (50%) so that even a compromised admin
+    /// cannot raise the ceiling high enough to destroy all reputation (issue
+    /// #783). Requests above the hard ceiling are rejected with
+    /// `DecayRateTooHigh`.
+    pub fn set_max_decay_rate(
+        env: Env,
+        signer: Address,
+        rate: u32,
+    ) -> Result<(), ReputationError> {
+        signer.require_auth();
+        if !is_signer(&env, &signer) {
+            return Err(ReputationError::NotAdmin);
+        }
+        if rate > MAX_DECAY_RATE_HARD_CEILING {
+            return Err(ReputationError::DecayRateTooHigh);
+        }
+        env.storage().instance().set(&DataKey::MaxDecayRate, &rate);
+        bump_instance_ttl(&env);
+
+        env.events().publish(
+            (symbol_short!("reput"), symbol_short!("max_decay")),
+            rate,
+        );
+
+        Ok(())
+    }
+
     /// Get the reputation data for a user, applying time decay to totals.
     pub fn get_reputation(env: Env, user: Address) -> Result<UserReputation, ReputationError> {
         bump_instance_ttl(&env);
@@ -1365,8 +1451,11 @@ impl ReputationContract {
                 }
             }
             AdminAction::SetDecayRate(rate) => {
-                if rate > 100 {
-                    return Err(ReputationError::InvalidDecayRate);
+                // Enforce the same upper bound as `update_decay_rate` so the
+                // multi-sig governance path cannot set a destructive decay rate
+                // (issue #783).
+                if rate > effective_max_decay_rate(env) {
+                    return Err(ReputationError::DecayRateTooHigh);
                 }
                 env.storage().instance().set(&DataKey::DecayRate, &rate);
             }

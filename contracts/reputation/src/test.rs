@@ -957,12 +957,12 @@ fn test_set_decay_rate() {
 
     reputation_client.initialize(&vec![&env, admin.clone()], &1u32, &50u32);
 
-    // Set valid decay rate
-    let prop_id = reputation_client.propose_admin_action(&admin, &AdminAction::SetDecayRate(75u32));
+    // Set a decay rate within the default maximum (MAX_DECAY_RATE = 20).
+    let _prop_id = reputation_client.propose_admin_action(&admin, &AdminAction::SetDecayRate(15u32));
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #10)")]
+#[should_panic(expected = "Error(Contract, #25)")]
 fn test_set_decay_rate_invalid() {
     let env = Env::default();
     env.mock_all_auths();
@@ -973,8 +973,8 @@ fn test_set_decay_rate_invalid() {
 
     reputation_client.initialize(&vec![&env, admin.clone()], &1u32, &50u32);
 
-    // Set invalid decay rate > 100
-    reputation_client.propose_admin_action(&admin, &AdminAction::SetDecayRate(101u32));
+    // A decay rate above the maximum (#783) is rejected with DecayRateTooHigh (#25).
+    reputation_client.propose_admin_action(&admin, &AdminAction::SetDecayRate(21u32));
 }
 
 #[test]
@@ -2405,5 +2405,68 @@ fn test_add_referral_bonus_accepts_past_timestamp() {
     let rep = client.get_reputation(&user);
     assert_eq!(rep.total_score, 5u64);
     assert_eq!(rep.total_weight, 1u64);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// #783 — Decay rate upper bound
+// ─────────────────────────────────────────────────────────────────────────────
+
+#[test]
+fn test_update_decay_rate_within_bound_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reputation_id = env.register_contract(None, ReputationContract);
+    let client = ReputationContractClient::new(&env, &reputation_id);
+    let admin = Address::generate(&env);
+    client.initialize(&vec![&env, admin.clone()], &1u32, &0u32);
+
+    // 20 == MAX_DECAY_RATE default -> accepted.
+    client.update_decay_rate(&admin, &20u32);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn test_update_decay_rate_above_bound_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reputation_id = env.register_contract(None, ReputationContract);
+    let client = ReputationContractClient::new(&env, &reputation_id);
+    let admin = Address::generate(&env);
+    client.initialize(&vec![&env, admin.clone()], &1u32, &0u32);
+
+    // 21 > MAX_DECAY_RATE (20) -> DecayRateTooHigh (#25).
+    client.update_decay_rate(&admin, &21u32);
+}
+
+#[test]
+fn test_super_admin_can_raise_max_decay_rate() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reputation_id = env.register_contract(None, ReputationContract);
+    let client = ReputationContractClient::new(&env, &reputation_id);
+    let admin = Address::generate(&env);
+    client.initialize(&vec![&env, admin.clone()], &1u32, &0u32);
+
+    // Super-admin raises the ceiling to 30, then a previously-rejected 25 is allowed.
+    client.set_max_decay_rate(&admin, &30u32);
+    client.update_decay_rate(&admin, &25u32);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn test_set_max_decay_rate_hard_ceiling_enforced() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let reputation_id = env.register_contract(None, ReputationContract);
+    let client = ReputationContractClient::new(&env, &reputation_id);
+    let admin = Address::generate(&env);
+    client.initialize(&vec![&env, admin.clone()], &1u32, &0u32);
+
+    // 51 > MAX_DECAY_RATE_HARD_CEILING (50) -> DecayRateTooHigh (#25).
+    client.set_max_decay_rate(&admin, &51u32);
 }
 
