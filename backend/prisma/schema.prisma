@@ -233,6 +233,8 @@ model Job {
   deadlineExtensionRequests DeadlineExtensionRequest[] @relation("DeadlineExtensions")
   escrowEvents EscrowEvent[]
 
+  contractPaused  Boolean  @default(false)
+
   @@index([deletedAt])
 }
 
